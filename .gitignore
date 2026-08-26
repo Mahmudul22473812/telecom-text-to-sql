@@ -1,0 +1,20 @@
+# Environment secrets
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local dataset files
+data/*.xlsx
+
+# Virtual environments
+venv/
+.venv/
+
+# VS Code settings
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
