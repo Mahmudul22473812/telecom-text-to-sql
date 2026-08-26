@@ -1,0 +1,143 @@
+[
+  {
+    "id": 1,
+    "question": "How many customers are there?",
+    "type": "clear",
+    "expected_behavior": "generate_sql",
+    "expected_metric": "count customers"
+  },
+  {
+    "id": 2,
+    "question": "What is the average monthly charge?",
+    "type": "clear",
+    "expected_behavior": "generate_sql",
+    "expected_metric": "average monthly charge"
+  },
+  {
+    "id": 3,
+    "question": "How many customers have churned?",
+    "type": "clear",
+    "expected_behavior": "generate_sql",
+    "expected_metric": "count churned customers"
+  },
+  {
+    "id": 4,
+    "question": "Which contract type has the most customers?",
+    "type": "clear",
+    "expected_behavior": "generate_sql",
+    "expected_metric": "customer count by contract"
+  },
+  {
+    "id": 5,
+    "question": "What is the average monthly charge of customers who churned?",
+    "type": "clear",
+    "expected_behavior": "generate_sql",
+    "expected_metric": "average monthly charge for churned customers"
+  },
+  {
+    "id": 6,
+    "question": "Which internet type has the highest average monthly charge?",
+    "type": "clear",
+    "expected_behavior": "generate_sql",
+    "expected_metric": "average monthly charge by internet type"
+  },
+  {
+    "id": 7,
+    "question": "Which city has the most customers?",
+    "type": "clear",
+    "expected_behavior": "generate_sql",
+    "expected_metric": "customer count by city"
+  },
+  {
+    "id": 8,
+    "question": "What is the average CLTV of churned customers?",
+    "type": "clear",
+    "expected_behavior": "generate_sql",
+    "expected_metric": "average CLTV for churned customers"
+  },
+  {
+    "id": 9,
+    "question": "Which payment method is used by the most customers?",
+    "type": "clear",
+    "expected_behavior": "generate_sql",
+    "expected_metric": "customer count by payment method"
+  },
+  {
+    "id": 10,
+    "question": "What percentage of customers have internet service?",
+    "type": "clear",
+    "expected_behavior": "generate_sql",
+    "expected_metric": "percentage of customers with internet service"
+  },
+
+  {
+    "id": 11,
+    "question": "Who are our best customers?",
+    "type": "ambiguous",
+    "expected_behavior": "clarify",
+    "ambiguity": "best customers could mean highest total revenue, highest CLTV, or longest tenure"
+  },
+  {
+    "id": 12,
+    "question": "Which customers are most valuable?",
+    "type": "ambiguous",
+    "expected_behavior": "clarify",
+    "ambiguity": "valuable could mean highest CLTV or highest total revenue"
+  },
+  {
+    "id": 13,
+    "question": "Which city performs best?",
+    "type": "ambiguous",
+    "expected_behavior": "clarify",
+    "ambiguity": "performance could mean revenue, customer count, or churn rate"
+  },
+  {
+    "id": 14,
+    "question": "Which customers are most loyal?",
+    "type": "ambiguous",
+    "expected_behavior": "clarify",
+    "ambiguity": "loyal could mean longest tenure, contract type, or referrals"
+  },
+  {
+    "id": 15,
+    "question": "Which customers are risky?",
+    "type": "ambiguous",
+    "expected_behavior": "clarify",
+    "ambiguity": "risk could mean high churn score, low satisfaction, or month-to-month contract"
+  },
+  {
+    "id": 16,
+    "question": "Which service is the most successful?",
+    "type": "ambiguous",
+    "expected_behavior": "clarify",
+    "ambiguity": "success could mean adoption, revenue, or retention"
+  },
+  {
+    "id": 17,
+    "question": "Which customers spend a lot?",
+    "type": "ambiguous",
+    "expected_behavior": "clarify",
+    "ambiguity": "a lot does not specify a threshold or ranking"
+  },
+  {
+    "id": 18,
+    "question": "Which customers have been with us for a long time?",
+    "type": "ambiguous",
+    "expected_behavior": "clarify",
+    "ambiguity": "long time does not specify a tenure threshold"
+  },
+  {
+    "id": 19,
+    "question": "Which areas have poor customer retention?",
+    "type": "ambiguous",
+    "expected_behavior": "clarify",
+    "ambiguity": "poor retention does not define a threshold or geographic level"
+  },
+  {
+    "id": 20,
+    "question": "Which customers have high monthly charges?",
+    "type": "ambiguous",
+    "expected_behavior": "clarify",
+    "ambiguity": "high does not specify a threshold or ranking"
+  }
+]
