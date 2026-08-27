@@ -1,0 +1,234 @@
+[
+  {
+    "id": "clear_count_subscribers",
+    "category": "clear_count",
+    "question": "Give me the total number of subscribers.",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT COUNT(d.customer_id) FROM demographics d;"
+  },
+  {
+    "id": "clear_customer_base_size",
+    "category": "clear_count",
+    "question": "What is the size of our customer base?",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT COUNT(d.customer_id) FROM demographics d;"
+  },
+  {
+    "id": "clear_churned_accounts",
+    "category": "clear_filter_count",
+    "question": "What is the number of accounts that churned?",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT COUNT(st.customer_id) FROM status st WHERE st.churn_value = 1;"
+  },
+  {
+    "id": "clear_mean_bill",
+    "category": "clear_aggregation",
+    "question": "Calculate the mean monthly bill across all customers.",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT AVG(s.monthly_charge) FROM services s;"
+  },
+  {
+    "id": "clear_churned_lifetime_value",
+    "category": "clear_join_filter",
+    "question": "What is the average lifetime value for people who left the company?",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT AVG(st.cltv) FROM status st WHERE st.churn_value = 1;"
+  },
+  {
+    "id": "clear_payment_popularity",
+    "category": "clear_group_ranking",
+    "question": "Which payment option is chosen by the largest number of subscribers?",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT s.payment_method, COUNT(s.customer_id) FROM services s GROUP BY s.payment_method ORDER BY COUNT(s.customer_id) DESC LIMIT 1;"
+  },
+  {
+    "id": "clear_city_customer_base",
+    "category": "clear_group_ranking",
+    "question": "Which city has the largest subscriber base?",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT l.city, COUNT(l.customer_id) FROM location l GROUP BY l.city ORDER BY COUNT(l.customer_id) DESC LIMIT 1;"
+  },
+  {
+    "id": "clear_common_contract",
+    "category": "clear_group_ranking",
+    "question": "What contract plan is the most common among customers?",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT s.contract, COUNT(s.customer_id) FROM services s GROUP BY s.contract ORDER BY COUNT(s.customer_id) DESC LIMIT 1;"
+  },
+  {
+    "id": "clear_internet_mean_bill",
+    "category": "clear_group_aggregation",
+    "question": "Which internet connection type has the greatest mean monthly bill?",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT s.internet_type, AVG(s.monthly_charge) FROM services s GROUP BY s.internet_type ORDER BY AVG(s.monthly_charge) DESC LIMIT 1;"
+  },
+  {
+    "id": "clear_internet_percentage",
+    "category": "clear_percentage",
+    "question": "What percent of subscribers are using internet service?",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT 100.0 * SUM(CASE WHEN s.internet_service = 'Yes' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0) FROM services s;"
+  },
+  {
+    "id": "clear_monthly_charge_threshold",
+    "category": "clear_threshold",
+    "question": "List customers whose monthly bill is above 100.",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT s.customer_id, s.monthly_charge FROM services s WHERE s.monthly_charge > 100 ORDER BY s.monthly_charge DESC LIMIT 20;"
+  },
+  {
+    "id": "clear_tenure_threshold",
+    "category": "clear_threshold",
+    "question": "Show customers with at least 48 months of tenure.",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT s.customer_id, s.tenure_in_months FROM services s WHERE s.tenure_in_months >= 48 ORDER BY s.tenure_in_months DESC LIMIT 20;"
+  },
+  {
+    "id": "clear_top_revenue",
+    "category": "clear_ranking",
+    "question": "Show the five customers who generated the greatest total revenue.",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT s.customer_id, s.total_revenue FROM services s ORDER BY s.total_revenue DESC LIMIT 5;"
+  },
+  {
+    "id": "clear_average_satisfaction",
+    "category": "clear_aggregation",
+    "question": "What is the mean customer satisfaction score?",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT AVG(st.satisfaction_score) FROM status st;"
+  },
+  {
+    "id": "clear_average_tenure",
+    "category": "clear_aggregation",
+    "question": "On average, how many months do customers stay with us?",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT AVG(s.tenure_in_months) FROM services s;"
+  },
+  {
+    "id": "clear_contract_breakdown",
+    "category": "clear_group_count",
+    "question": "Give me the customer count for each contract type.",
+    "expected_ambiguous": false,
+    "order_sensitive": false,
+    "reference_sql": "SELECT s.contract, COUNT(s.customer_id) FROM services s GROUP BY s.contract;"
+  },
+  {
+    "id": "clear_city_breakdown",
+    "category": "clear_group_count",
+    "question": "Break down the number of customers by city.",
+    "expected_ambiguous": false,
+    "order_sensitive": false,
+    "reference_sql": "SELECT l.city, COUNT(l.customer_id) FROM location l GROUP BY l.city;"
+  },
+  {
+    "id": "clear_lowest_internet_bill",
+    "category": "clear_group_aggregation",
+    "question": "Which internet type has the lowest average monthly charge?",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT s.internet_type, AVG(s.monthly_charge) FROM services s GROUP BY s.internet_type ORDER BY AVG(s.monthly_charge) ASC LIMIT 1;"
+  },
+  {
+    "id": "ambiguous_premium_customers",
+    "category": "ambiguous_definition",
+    "question": "Show me our premium customers.",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "ambiguous_doing_well",
+    "category": "ambiguous_definition",
+    "question": "Which customers are doing well?",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "ambiguous_expensive_plans",
+    "category": "ambiguous_threshold",
+    "question": "Find customers with expensive monthly plans.",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "ambiguous_longstanding",
+    "category": "ambiguous_threshold",
+    "question": "Show our long-standing subscribers.",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "ambiguous_worst_city",
+    "category": "ambiguous_ranking",
+    "question": "Which city is performing the worst?",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "ambiguous_risky_accounts",
+    "category": "ambiguous_definition",
+    "question": "Find the risky accounts.",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "ambiguous_successful_contract",
+    "category": "ambiguous_ranking",
+    "question": "What is our most successful contract?",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "ambiguous_low_satisfaction",
+    "category": "ambiguous_threshold",
+    "question": "List customers with low satisfaction.",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "ambiguous_retention_areas",
+    "category": "ambiguous_multiple",
+    "question": "Which places are losing too many customers?",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "ambiguous_top_subscribers",
+    "category": "ambiguous_ranking",
+    "question": "Give me the top subscribers.",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "ambiguous_big_spenders_tenure",
+    "category": "ambiguous_multiple",
+    "question": "Find big spenders who have stayed a long time.",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "ambiguous_best_internet",
+    "category": "ambiguous_ranking",
+    "question": "Which internet service is best?",
+    "expected_ambiguous": true
+  },
+  {
+    "id": "clarified_best_revenue",
+    "category": "clarified_ranking",
+    "question": "Who are our strongest customers?",
+    "expected_ambiguous": true,
+    "clarification_answers": ["highest total revenue"],
+    "reference_sql": "SELECT s.customer_id, s.total_revenue FROM services s ORDER BY s.total_revenue DESC LIMIT 20;"
+  },
+  {
+    "id": "clarified_expensive_bill",
+    "category": "clarified_threshold",
+    "question": "Which customers have expensive monthly bills?",
+    "expected_ambiguous": true,
+    "clarification_answers": ["above 100"],
+    "reference_sql": "SELECT s.customer_id, s.monthly_charge FROM services s WHERE s.monthly_charge > 100 ORDER BY s.monthly_charge DESC LIMIT 20;"
+  },
+  {
+    "id": "clarified_long_tenure",
+    "category": "clarified_threshold",
+    "question": "Who are our long-term customers?",
+    "expected_ambiguous": true,
+    "clarification_answers": ["at least 48 months"],
+    "reference_sql": "SELECT s.customer_id, s.tenure_in_months FROM services s WHERE s.tenure_in_months >= 48 ORDER BY s.tenure_in_months DESC LIMIT 20;"
+  },
+  {
+    "id": "clarified_two_slots",
+    "category": "clarified_multiple",
+    "question": "Show the strongest customers with expensive monthly bills.",
+    "expected_ambiguous": true,
+    "clarification_answers": ["highest total revenue", "above 100"],
+    "reference_sql": "SELECT s.customer_id, s.total_revenue FROM services s WHERE s.monthly_charge > 100 ORDER BY s.total_revenue DESC LIMIT 20;"
+  }
+]
