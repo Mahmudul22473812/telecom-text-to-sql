@@ -1,252 +1,67 @@
-from clarification import check_ambiguity
-from intent_resolver import resolve_intent
-from intent_validator import validate_intent
-from query_executor import execute_query
-from sql_generator import generate_sql_from_intent
+from pipeline import run_pipeline
 
 
-# --------------------------------------------------
-# Get user question
-# --------------------------------------------------
-
-question = input(
-    "Ask a telecom database question: "
-)
+MAX_ROWS_TO_DISPLAY = 20
 
 
-# --------------------------------------------------
-# Run dynamic clarification pipeline
-# --------------------------------------------------
+def request_clarification(question, _intent):
+    print("\nClarification needed:\n")
+    print(question)
+    return input("\nYour answer: ")
 
-try:
 
-    ambiguity_result = check_ambiguity(
-        question
+def main():
+    question = input(
+        "Ask a telecom database question: "
     )
 
-except Exception as error:
-
-    print(
-        "\nClarification pipeline failed:"
+    result = run_pipeline(
+        question,
+        clarification_provider=request_clarification,
+        execute=True,
     )
 
-    print(error)
+    if result.sql:
+        print("\nGenerated SQL:\n")
+        print(result.sql)
 
-    exit()
+    if result.status == "success":
+        print("\nSQL validation passed.")
+        print("\nQuery Result:\n")
+        print("Columns:", result.columns)
 
+        if not result.rows:
+            print("No results found.")
+        else:
+            for row in result.rows[:MAX_ROWS_TO_DISPLAY]:
+                print(row)
 
-# --------------------------------------------------
-# If clarification is required
-# --------------------------------------------------
-
-if ambiguity_result["ambiguous"]:
-
-    current_intent = ambiguity_result["intent"]
-
-    while True:
-
-        clarification_question = (
-            ambiguity_result[
-                "clarification_question"
-            ]
-        )
+            if len(result.rows) > MAX_ROWS_TO_DISPLAY:
+                print(
+                    f"\nShowing first {MAX_ROWS_TO_DISPLAY} rows "
+                    f"out of {len(result.rows)} total rows."
+                )
 
         print(
-            "\nClarification needed:\n"
+            f"\nCompleted in {result.total_latency_ms:.1f} ms."
         )
+        return
 
-        print(
-            clarification_question
-        )
+    if result.status == "sql_rejected":
+        print("\nSQL validation failed:")
 
-        clarification_answer = input(
-            "\nYour answer: "
-        )
+        for error in result.sql_validation_errors:
+            print(f"- {error}")
 
+        return
 
-        # --------------------------------------------------
-        # Resolve clarification
-        # --------------------------------------------------
+    if result.status == "needs_clarification":
+        print("\nThe request still needs clarification.")
+        return
 
-        print(
-            "\nResolving your clarification..."
-        )
+    print("\nPipeline failed:")
+    print(result.error or "Unknown error")
 
-        try:
 
-            current_intent = resolve_intent(
-                original_question=question,
-                intent=current_intent,
-                clarification_answer=clarification_answer
-            )
-
-        except Exception as error:
-
-            print(
-                "\nIntent resolution failed:"
-            )
-
-            print(error)
-
-            exit()
-
-
-        print(
-            "Clarification resolved."
-        )
-
-
-        # --------------------------------------------------
-        # Validate the updated intent
-        # --------------------------------------------------
-
-        validation = validate_intent(
-            current_intent
-        )
-
-
-        # --------------------------------------------------
-        # If complete, stop asking questions
-        # --------------------------------------------------
-
-        if validation.is_complete:
-
-            print(
-                "\nIntent is now complete."
-            )
-
-            break
-
-
-        # --------------------------------------------------
-        # Otherwise continue clarification loop
-        # --------------------------------------------------
-
-        ambiguity_result = {
-            "ambiguous": True,
-            "clarification_question":
-                validation.clarification_question,
-            "unresolved_slots":
-                validation.unresolved_slots,
-            "reasons":
-                validation.reasons,
-            "intent":
-                current_intent
-        }
-
-
-# --------------------------------------------------
-# If no clarification is required
-# --------------------------------------------------
-
-else:
-
-    current_intent = ambiguity_result[
-        "intent"
-    ]
-
-
-# --------------------------------------------------
-# Generate SQL deterministically from intent
-# --------------------------------------------------
-
-print(
-    "\nGenerating SQL from validated intent..."
-)
-
-try:
-
-    sql_query = generate_sql_from_intent(
-        current_intent
-    )
-
-except Exception as error:
-
-    print(
-        "\nSQL generation failed:"
-    )
-
-    print(error)
-
-    exit()
-
-
-print(
-    "\nGenerated SQL:\n"
-)
-
-print(
-    sql_query
-)
-
-
-# --------------------------------------------------
-# Execute SQL
-# --------------------------------------------------
-
-try:
-
-    columns, rows = execute_query(
-        sql_query
-    )
-
-    print(
-        "\nQuery Result:\n"
-    )
-
-    print(
-        "Columns:",
-        columns
-    )
-
-    MAX_ROWS_TO_DISPLAY = 20
-
-
-    # --------------------------------------------------
-    # No rows returned
-    # --------------------------------------------------
-
-    if len(rows) == 0:
-
-        print(
-            "No results found."
-        )
-
-
-    # --------------------------------------------------
-    # Small result set
-    # --------------------------------------------------
-
-    elif len(rows) <= MAX_ROWS_TO_DISPLAY:
-
-        for row in rows:
-
-            print(row)
-
-
-    # --------------------------------------------------
-    # Large result set
-    # --------------------------------------------------
-
-    else:
-
-        for row in rows[
-            :MAX_ROWS_TO_DISPLAY
-        ]:
-
-            print(row)
-
-        print(
-            f"\nShowing first "
-            f"{MAX_ROWS_TO_DISPLAY} rows "
-            f"out of {len(rows)} total rows."
-        )
-
-
-except Exception as error:
-
-    print(
-        "\nQuery execution failed:"
-    )
-
-    print(error)
+if __name__ == "__main__":
+    main()
