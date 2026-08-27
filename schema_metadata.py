@@ -36,8 +36,14 @@ SCHEMA_METADATA = {
     "services.internet_type": {
         "description": "Type of internet service used by the customer"
     },
+    "services.internet_service": {
+        "description": "Whether the customer has internet service, recorded as Yes or No"
+    },
     "services.contract": {
         "description": "Customer contract type"
+    },
+    "services.payment_method": {
+        "description": "Payment method used by the customer"
     },
 
     "status.customer_id": {

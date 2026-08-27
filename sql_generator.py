@@ -114,6 +114,11 @@ def get_required_tables(intent):
     for condition in intent.filters:
         add_column(condition.field)
 
+    if intent.percentage_condition:
+        add_column(
+            intent.percentage_condition.field
+        )
+
     return tables
 
 
@@ -285,6 +290,43 @@ def build_select(intent):
     # --------------------------------------------------
 
     if (
+        intent.aggregation
+        and intent.aggregation.upper() == "PERCENTAGE"
+        and intent.percentage_condition
+    ):
+
+        condition = intent.percentage_condition
+        condition_field = sql_column(
+            condition.field
+        )
+        condition_operator = (
+            condition.operator
+            or "="
+        ).upper()
+        condition_value = format_value(
+            condition.value
+        )
+
+        expression = (
+            "100.0 * SUM(CASE WHEN "
+            f"{condition_field} "
+            f"{condition_operator} "
+            f"{condition_value} "
+            "THEN 1 ELSE 0 END) "
+            "/ NULLIF(COUNT(*), 0) "
+            "AS percentage_of_customers"
+        )
+
+        selected.append(
+            expression
+        )
+
+
+    # --------------------------------------------------
+    # Other aggregated metrics
+    # --------------------------------------------------
+
+    elif (
         intent.aggregation
         and intent.metric
     ):
@@ -566,6 +608,27 @@ def generate_sql_from_intent(
     working_intent = intent.model_copy(
         deep=True
     )
+
+    if working_intent.aggregation:
+        allowed_aggregations = {
+            "COUNT",
+            "AVG",
+            "SUM",
+            "MIN",
+            "MAX",
+            "PERCENTAGE",
+        }
+        normalized_aggregation = (
+            working_intent.aggregation.upper()
+        )
+
+        if normalized_aggregation not in allowed_aggregations:
+            raise ValueError(
+                "Unsupported SQL aggregation: "
+                f"{working_intent.aggregation}"
+            )
+
+        working_intent.aggregation = normalized_aggregation
 
 
     # --------------------------------------------------

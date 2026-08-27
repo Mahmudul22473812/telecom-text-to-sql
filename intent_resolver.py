@@ -236,6 +236,30 @@ User clarification:
 
             filter_condition.value = number
 
+            if re.search(
+                r"\b(?:at least|no less than|minimum)\b",
+                answer_lower
+            ):
+                filter_condition.operator = ">="
+
+            elif re.search(
+                r"\b(?:above|over|more than|greater than)\b",
+                answer_lower
+            ):
+                filter_condition.operator = ">"
+
+            elif re.search(
+                r"\b(?:at most|no more than|maximum)\b",
+                answer_lower
+            ):
+                filter_condition.operator = "<="
+
+            elif re.search(
+                r"\b(?:below|under|less than)\b",
+                answer_lower
+            ):
+                filter_condition.operator = "<"
+
             # We resolve ONE missing numeric filter
             # with this clarification.
             break

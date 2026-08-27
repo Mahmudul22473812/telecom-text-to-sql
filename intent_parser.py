@@ -1,7 +1,7 @@
 import json
 
 import ollama
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from schema_retriever import retrieve_relevant_columns
 
@@ -28,6 +28,8 @@ class QueryIntent(BaseModel):
 
     aggregation: str | None = None
 
+    percentage_condition: FilterCondition | None = None
+
     filters: list[FilterCondition] = Field(default_factory=list)
 
     group_by: list[str] = Field(default_factory=list)
@@ -43,6 +45,21 @@ class QueryIntent(BaseModel):
     ambiguity_reasons: list[str] = Field(default_factory=list)
 
     clarification_question: str | None = None
+
+    @field_validator("percentage_condition", mode="before")
+    @classmethod
+    def normalize_percentage_condition(cls, value):
+        # Small local models sometimes return only the condition's field.
+        # Preserve it as a typed partial condition so deterministic
+        # normalization can complete or reject it safely.
+        if isinstance(value, str):
+            return {
+                "field": value,
+                "operator": None,
+                "value": None,
+            }
+
+        return value
 
 
 # --------------------------------------------------
@@ -123,7 +140,13 @@ CORE RULES
 8. If the user explicitly specifies a metric, use that metric.
 
 9. If the user explicitly specifies an aggregation such as average,
-   count, total, minimum, or maximum, preserve it.
+   count, percentage, total, minimum, or maximum, preserve it.
+
+   "How many customers" explicitly means COUNT customers.
+
+   "Which X has the most customers" explicitly means group by X,
+   COUNT customers, order by that count descending, and limit to 1.
+   The ranking metric is customer count and is NOT ambiguous.
 
 10. If the user explicitly specifies a grouping category, preserve it.
 
@@ -304,7 +327,11 @@ The primary measurable field involved in a calculation,
 ranking, or comparison.
 
 aggregation:
-COUNT, AVG, SUM, MIN, MAX, or null.
+COUNT, AVG, SUM, MIN, MAX, PERCENTAGE, or null.
+
+percentage_condition:
+For a PERCENTAGE aggregation, the condition identifying records in
+the numerator. Otherwise null.
 
 filters:
 Conditions restricting records.
@@ -568,6 +595,7 @@ Return ONLY valid JSON matching exactly this structure:
     "selected_fields": [],
     "metric": "string or null",
     "aggregation": "string or null",
+    "percentage_condition": null,
     "filters": [
         {{
             "field": "string or null",
@@ -630,7 +658,16 @@ USER QUESTION:
     # Step 5: Validate with Pydantic
     # --------------------------------------------------
 
-    return QueryIntent.model_validate(data)
+    intent = QueryIntent.model_validate(data)
+
+    # LLMs can still contradict explicit language even at temperature 0.
+    # Normalize high-confidence business expressions deterministically.
+    from intent_normalizer import normalize_intent
+
+    return normalize_intent(
+        question,
+        intent,
+    )
 
 
 

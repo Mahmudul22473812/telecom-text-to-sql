@@ -229,6 +229,7 @@ def validate_intent(
         "SUM",
         "MIN",
         "MAX",
+        "PERCENTAGE",
     }
 
 
@@ -237,6 +238,27 @@ def validate_intent(
         aggregation = (
             intent.aggregation.upper()
         )
+
+        allowed_aggregations = {
+            "COUNT",
+            "AVG",
+            "SUM",
+            "MIN",
+            "MAX",
+            "PERCENTAGE",
+        }
+
+        if aggregation not in allowed_aggregations:
+
+            add_issue(
+                unresolved_slots,
+                reasons,
+                "aggregation",
+                (
+                    f"Unsupported aggregation "
+                    f"'{intent.aggregation}'."
+                )
+            )
 
         if (
             aggregation
@@ -254,6 +276,32 @@ def validate_intent(
                     "was identified."
                 )
             )
+
+
+    # --------------------------------------------------
+    # 2a. Validate percentage calculation
+    # --------------------------------------------------
+
+    if (
+        intent.aggregation
+        and intent.aggregation.upper() == "PERCENTAGE"
+        and (
+            intent.percentage_condition is None
+            or intent.percentage_condition.field is None
+            or intent.percentage_condition.operator is None
+            or intent.percentage_condition.value is None
+        )
+    ):
+
+        add_issue(
+            unresolved_slots,
+            reasons,
+            "percentage_condition",
+            (
+                "PERCENTAGE requires a condition "
+                "that defines the numerator."
+            )
+        )
 
 
     # --------------------------------------------------

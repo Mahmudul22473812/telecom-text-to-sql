@@ -1,5 +1,6 @@
 import json
 import math
+from functools import lru_cache
 
 import ollama
 
@@ -41,6 +42,7 @@ def cosine_similarity(vector_a, vector_b):
 # Generate embedding
 # --------------------------------------------------
 
+@lru_cache(maxsize=512)
 def get_embedding(text):
 
     response = ollama.embed(
@@ -48,7 +50,7 @@ def get_embedding(text):
         input=text
     )
 
-    return response["embeddings"][0]
+    return tuple(response["embeddings"][0])
 
 
 # --------------------------------------------------
