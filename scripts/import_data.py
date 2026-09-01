@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 # Load environment variables
 # --------------------------------------------------
 
-env_path = Path(__file__).parent / ".env"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+env_path = PROJECT_ROOT / ".env"
 load_dotenv(dotenv_path=env_path)
 
 
@@ -32,11 +33,11 @@ connection = psycopg.connect(
 # --------------------------------------------------
 
 datasets = {
-    "demographics": "data/Telco_customer_churn_demographics.xlsx",
-    "population": "data/Telco_customer_churn_population.xlsx",
-    "location": "data/Telco_customer_churn_location.xlsx",
-    "services": "data/Telco_customer_churn_services.xlsx",
-    "status": "data/Telco_customer_churn_status.xlsx",
+    "demographics": PROJECT_ROOT / "data/Telco_customer_churn_demographics.xlsx",
+    "population": PROJECT_ROOT / "data/Telco_customer_churn_population.xlsx",
+    "location": PROJECT_ROOT / "data/Telco_customer_churn_location.xlsx",
+    "services": PROJECT_ROOT / "data/Telco_customer_churn_services.xlsx",
+    "status": PROJECT_ROOT / "data/Telco_customer_churn_status.xlsx",
 }
 
 

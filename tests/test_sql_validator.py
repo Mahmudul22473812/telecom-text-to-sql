@@ -1,6 +1,6 @@
 import unittest
 
-from sql_validator import remove_sql_comments, validate_sql
+from telecom_text_to_sql.sql_validator import remove_sql_comments, validate_sql
 
 
 class SQLValidatorTests(unittest.TestCase):

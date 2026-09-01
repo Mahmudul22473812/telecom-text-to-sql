@@ -1,6 +1,6 @@
 from collections import deque
 
-from intent_parser import QueryIntent
+from .intent_parser import QueryIntent
 
 
 # --------------------------------------------------
@@ -29,14 +29,20 @@ RELATIONSHIPS = {
 
     "services": {
         "demographics": "s.customer_id = d.customer_id",
+        "status": "s.customer_id = st.customer_id",
+        "location": "s.customer_id = l.customer_id",
     },
 
     "status": {
         "demographics": "st.customer_id = d.customer_id",
+        "services": "st.customer_id = s.customer_id",
+        "location": "st.customer_id = l.customer_id",
     },
 
     "location": {
         "demographics": "l.customer_id = d.customer_id",
+        "services": "l.customer_id = s.customer_id",
+        "status": "l.customer_id = st.customer_id",
         "population": "l.zip_code = p.zip_code",
     },
 
@@ -90,7 +96,7 @@ def sql_column(column):
 
 def get_required_tables(intent):
 
-    tables = set()
+    tables = []
 
     def add_column(column):
 
@@ -99,8 +105,13 @@ def get_required_tables(intent):
 
         table, _ = parse_column(column)
 
-        if table:
-            tables.add(table)
+        if table and table not in tables:
+            tables.append(table)
+
+    # Grouping/selected tables define the result universe and should be the
+    # FROM side of any conditional aggregate join.
+    for field in intent.group_by:
+        add_column(field)
 
     for field in intent.selected_fields:
         add_column(field)
@@ -108,10 +119,10 @@ def get_required_tables(intent):
     add_column(intent.metric)
     add_column(intent.order_by)
 
-    for field in intent.group_by:
-        add_column(field)
-
     for condition in intent.filters:
+        add_column(condition.field)
+
+    for condition in intent.aggregation_filters:
         add_column(condition.field)
 
     if intent.percentage_condition:
@@ -169,7 +180,7 @@ def find_path(start, target):
 # Build FROM and JOIN clauses
 # --------------------------------------------------
 
-def build_from_clause(required_tables):
+def build_from_clause(required_tables, left_join_tables=None):
 
     if not required_tables:
         raise ValueError(
@@ -178,6 +189,7 @@ def build_from_clause(required_tables):
         )
 
     required_tables = list(required_tables)
+    left_join_tables = set(left_join_tables or [])
 
     base_table = required_tables[0]
 
@@ -213,8 +225,13 @@ def build_from_clause(required_tables):
                 current
             ][next_table]
 
+            join_type = (
+                "LEFT JOIN"
+                if next_table in left_join_tables
+                else "JOIN"
+            )
             joins.append(
-                f"JOIN {next_table} "
+                f"{join_type} {next_table} "
                 f"{ALIASES[next_table]} "
                 f"ON {condition}"
             )
@@ -262,6 +279,33 @@ def format_value(value):
     )
 
     return f"'{escaped}'"
+
+
+def build_condition_sql(condition):
+    """Compile one validated filter condition without choosing its clause."""
+
+    field_sql = sql_column(condition.field)
+    operator = (condition.operator or "=").upper()
+
+    if operator in {"IS NULL", "IS NOT NULL"}:
+        return f"{field_sql} {operator}"
+
+    return f"{field_sql} {operator} {format_value(condition.value)}"
+
+
+def build_aggregate_expression(intent):
+    aggregation = intent.aggregation.upper()
+    metric_sql = sql_column(intent.metric)
+
+    if aggregation == "COUNT" and intent.aggregation_filters:
+        condition_sql = " AND ".join(
+            build_condition_sql(condition)
+            for condition in intent.aggregation_filters
+            if condition.field
+        )
+        return f"COUNT(CASE WHEN {condition_sql} THEN 1 END)"
+
+    return f"{aggregation}({metric_sql})"
 
 
 # --------------------------------------------------
@@ -348,11 +392,7 @@ def build_select(intent):
             f"{metric_name}"
         )
 
-        expression = (
-            f"{aggregation}"
-            f"({metric_sql}) "
-            f"AS {alias}"
-        )
+        expression = f"{build_aggregate_expression(intent)} AS {alias}"
 
         if expression not in selected:
             selected.append(expression)
@@ -482,45 +522,7 @@ def build_where(intent):
         if not condition.field:
             continue
 
-        field_sql = sql_column(
-            condition.field
-        )
-
-        operator = (
-            condition.operator
-            or "="
-        ).upper()
-
-
-        # --------------------------------------------------
-        # Operators without values
-        # --------------------------------------------------
-
-        if operator in {
-            "IS NULL",
-            "IS NOT NULL",
-        }:
-
-            conditions.append(
-                f"{field_sql} {operator}"
-            )
-
-            continue
-
-
-        # --------------------------------------------------
-        # Normal comparison
-        # --------------------------------------------------
-
-        value_sql = format_value(
-            condition.value
-        )
-
-        conditions.append(
-            f"{field_sql} "
-            f"{operator} "
-            f"{value_sql}"
-        )
+        conditions.append(build_condition_sql(condition))
 
 
     if not conditions:
@@ -532,67 +534,6 @@ def build_where(intent):
             conditions
         )
     )
-
-
-# --------------------------------------------------
-# Apply sensible default ordering
-# --------------------------------------------------
-
-def apply_default_ordering(intent):
-
-    if intent.order_by:
-        return
-
-
-    # --------------------------------------------------
-    # Customer threshold queries
-    # --------------------------------------------------
-
-    if (
-        not intent.aggregation
-        and intent.target_entity
-        and "customer"
-        in intent.target_entity.lower()
-    ):
-
-        for condition in intent.filters:
-
-            if not condition.field:
-                continue
-
-            operator = (
-                condition.operator
-                or ""
-            ).upper()
-
-            intent.order_by = (
-                condition.field
-            )
-
-            if operator in {
-                ">",
-                ">=",
-            }:
-
-                intent.order_direction = (
-                    "DESC"
-                )
-
-            elif operator in {
-                "<",
-                "<=",
-            }:
-
-                intent.order_direction = (
-                    "ASC"
-                )
-
-            else:
-
-                intent.order_by = None
-                intent.order_direction = None
-
-            break
 
 
 # --------------------------------------------------
@@ -632,15 +573,6 @@ def generate_sql_from_intent(
 
 
     # --------------------------------------------------
-    # Add default ordering when useful
-    # --------------------------------------------------
-
-    apply_default_ordering(
-        working_intent
-    )
-
-
-    # --------------------------------------------------
     # Required tables
     # --------------------------------------------------
 
@@ -649,6 +581,12 @@ def generate_sql_from_intent(
             working_intent
         )
     )
+
+    conditional_tables = {
+        parse_column(condition.field)[0]
+        for condition in working_intent.aggregation_filters
+        if condition.field
+    }
 
 
     # --------------------------------------------------
@@ -669,7 +607,8 @@ def generate_sql_from_intent(
 
     from_clause = (
         build_from_clause(
-            required_tables
+            required_tables,
+            left_join_tables=conditional_tables,
         )
     )
 
@@ -733,9 +672,8 @@ def generate_sql_from_intent(
             == working_intent.metric
         ):
 
-            order_expression = (
-                f"{working_intent.aggregation.upper()}"
-                f"({sql_column(working_intent.metric)})"
+            order_expression = build_aggregate_expression(
+                working_intent
             )
 
         else:
@@ -777,21 +715,6 @@ def generate_sql_from_intent(
 
         else:
             limit = None
-
-
-    # --------------------------------------------------
-    # Default limit for customer lists
-    # --------------------------------------------------
-
-    if (
-        limit is None
-        and not working_intent.aggregation
-        and working_intent.target_entity
-        and "customer"
-        in working_intent.target_entity.lower()
-    ):
-
-        limit = 20
 
 
     if limit is not None:

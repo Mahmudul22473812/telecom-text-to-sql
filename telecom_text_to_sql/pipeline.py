@@ -3,13 +3,14 @@ from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any
 
-from clarification import check_ambiguity
-from intent_parser import QueryIntent
-from intent_resolver import resolve_intent
-from intent_validator import validate_intent
-from query_executor import execute_query
-from sql_generator import generate_sql_from_intent
-from sql_validator import validate_sql
+from .clarification import check_ambiguity
+from .intent_parser import QueryIntent
+from .intent_resolver import resolve_intent
+from .intent_validator import validate_intent
+from .query_executor import execute_query
+from .request_guard import unsupported_reason
+from .sql_generator import generate_sql_from_intent
+from .sql_validator import validate_sql
 
 
 @dataclass
@@ -99,6 +100,13 @@ def run_pipeline(
 
     if not isinstance(question, str) or not question.strip():
         result.error = "Question must be a non-empty string."
+        return finish()
+
+    scope_error = unsupported_reason(question)
+
+    if scope_error:
+        result.status = "unsupported"
+        result.error = scope_error
         return finish()
 
     answers = iter(clarification_answers or [])

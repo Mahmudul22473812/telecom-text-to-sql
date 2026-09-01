@@ -2,11 +2,15 @@ import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from .schema_metadata import normalize_schema_language
+
 if TYPE_CHECKING:
-    from intent_parser import QueryIntent
+    from .intent_parser import QueryIntent
 
 
-CUSTOMER_NOUN = r"(?:customers?|subscribers?|accounts?|clients?)"
+CUSTOMER_NOUN = (
+    r"(?:customers?|subscribers?|accounts?|clients?|users?|people|folks)"
+)
 
 GROUP_DIMENSIONS = {
     "payment method": "services.payment_method",
@@ -16,21 +20,41 @@ GROUP_DIMENSIONS = {
     "contract": "services.contract",
     "internet connection type": "services.internet_type",
     "internet type": "services.internet_type",
+    "customer status": "status.customer_status",
+    "status": "status.customer_status",
     "city": "location.city",
+    "zip code": "location.zip_code",
+    "zipcode": "location.zip_code",
+    "gender": "demographics.gender",
 }
 
 METRIC_CONCEPTS = {
+    "customer age": "demographics.age",
+    "years old": "demographics.age",
+    "aged": "demographics.age",
+    "age": "demographics.age",
+    "older": "demographics.age",
+    "younger": "demographics.age",
     "monthly charge": "services.monthly_charge",
     "monthly charges": "services.monthly_charge",
     "monthly bill": "services.monthly_charge",
     "monthly bills": "services.monthly_charge",
+    "total charge": "services.total_charges",
+    "total charges": "services.total_charges",
     "total revenue": "services.total_revenue",
+    "average monthly gb download": "services.avg_monthly_gb_download",
+    "monthly gb download": "services.avg_monthly_gb_download",
+    "monthly data download": "services.avg_monthly_gb_download",
     "lifetime value": "status.cltv",
     "cltv": "status.cltv",
+    "churn score": "status.churn_score",
     "satisfaction score": "status.satisfaction_score",
     "satisfaction": "status.satisfaction_score",
+    "months of tenure": "services.tenure_in_months",
     "tenure": "services.tenure_in_months",
     "months do customers stay": "services.tenure_in_months",
+    "staying with us": "services.tenure_in_months",
+    "been with us": "services.tenure_in_months",
 }
 
 NUMBER_WORDS = {
@@ -44,6 +68,16 @@ NUMBER_WORDS = {
     "eight": 8,
     "nine": 9,
     "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
 }
 
 
@@ -120,6 +154,7 @@ def _customer_id_for_intent(intent: "QueryIntent") -> str:
 
 
 def _find_group_dimension(question: str) -> str | None:
+    question = normalize_schema_language(question)
     for phrase, column in GROUP_DIMENSIONS.items():
         if re.search(rf"\b{re.escape(phrase)}\b", question):
             return column
@@ -128,11 +163,48 @@ def _find_group_dimension(question: str) -> str | None:
 
 
 def _find_metric(question: str) -> str | None:
+    question = normalize_schema_language(question)
     for phrase, column in METRIC_CONCEPTS.items():
-        if phrase in question:
+        if re.search(
+            rf"(?<!\w){re.escape(phrase)}(?!\w)",
+            question,
+        ):
             return column
 
     return None
+
+
+def _grouping_requested(
+    question: str,
+    dimension: str | None,
+) -> bool:
+    """Recognize equivalent category-distribution expressions."""
+
+    if dimension is None:
+        return False
+
+    question = normalize_schema_language(question)
+    phrases = [
+        phrase
+        for phrase, column in GROUP_DIMENSIONS.items()
+        if column == dimension
+    ]
+    phrase_pattern = "(?:" + "|".join(
+        re.escape(normalize_schema_language(phrase))
+        for phrase in phrases
+    ) + ")"
+    category_prefix = r"(?:type|kind|category|option)\s+of\s+(?:the\s+)?"
+    patterns = (
+        rf"\bby\s+(?:each\s+|every\s+)?{phrase_pattern}\b",
+        rf"\bper\s+{phrase_pattern}\b",
+        rf"\bfor\s+(?:each|every|all)\s+{phrase_pattern}\b",
+        rf"\bin\s+each\s+{phrase_pattern}\b",
+        rf"\b(?:each|every|all)\s+{phrase_pattern}\b",
+        rf"\b(?:each|every|all)\s+{category_prefix}{phrase_pattern}\b",
+        rf"\b{phrase_pattern}\s+wise\b",
+        rf"\b{phrase_pattern}\b.*\b(?:breakdown|distribution)\b",
+    )
+    return any(re.search(pattern, question) for pattern in patterns)
 
 
 def _extract_limit(question: str) -> int | None:
@@ -170,7 +242,7 @@ def _normalize_churned_filter(
     if not churn_phrase:
         return
 
-    from intent_parser import FilterCondition
+    from .intent_parser import FilterCondition
 
     intent.filters = [
         condition
@@ -227,9 +299,20 @@ def _normalize_churned_filter(
 
 
 def _customer_count_kind(question: str) -> str | None:
+    question = normalize_schema_language(question)
+    dimension = _find_group_dimension(question)
+
+    if (
+        dimension
+        and _grouping_requested(question, dimension)
+        and re.search(CUSTOMER_NOUN, question)
+    ):
+        return "grouped"
+
     scalar_patterns = (
         rf"\bhow many\s+{CUSTOMER_NOUN}\b",
         rf"\b(?:total )?number of\s+{CUSTOMER_NOUN}\b",
+        rf"\bcount\s+(?:the\s+)?{CUSTOMER_NOUN}\b",
         rf"\b(?:customer|subscriber|account|client) count\b",
         r"\bsize of (?:our|the) customer base\b",
     )
@@ -239,8 +322,14 @@ def _customer_count_kind(question: str) -> str | None:
         rf"\bmost\s+{CUSTOMER_NOUN}\b",
         rf"\bmost common among\s+{CUSTOMER_NOUN}\b",
         rf"\bnumber of\s+{CUSTOMER_NOUN}\s+by\b",
-        rf"\b{CUSTOMER_NOUN}\s+count\s+(?:for each|by)\b",
+        rf"\b{CUSTOMER_NOUN}\s+count\s+"
+        r"(?:for\s+(?:each|every)|per|by)\b",
         rf"\bbreak down (?:the )?number of\s+{CUSTOMER_NOUN}\s+by\b",
+        rf"\bhow many\s+{CUSTOMER_NOUN}\b.*"
+        r"\b(?:for\s+(?:each|every)|in\s+each|per|by)\b",
+        rf"\bcount\s+(?:the\s+)?{CUSTOMER_NOUN}\b.*"
+        r"\b(?:for\s+(?:each|every)|in\s+each|per|by)\b",
+        rf"\b{CUSTOMER_NOUN}\s+count\b.*\b\w+\s+wise\b",
     )
 
     if any(re.search(pattern, question) for pattern in grouped_patterns):
@@ -280,8 +369,21 @@ def _normalize_customer_count(
         # A grouped customer-count question names the dimension, not a
         # particular dimension value. Small models sometimes invent a
         # null-valued filter for that same column.
+        intent.filters = [
+            condition
+            for condition in intent.filters
+            if not (
+                condition.field == dimension
+                and condition.value is None
+            )
+        ]
+        # The filters describe which customer records are counted inside
+        # each requested group. Keeping them out of WHERE preserves groups
+        # whose matching count is zero.
+        intent.aggregation_filters = list(intent.filters)
         intent.filters = []
     else:
+        intent.aggregation_filters = []
         intent.group_by = []
         intent.selected_fields = []
 
@@ -350,6 +452,7 @@ def _normalize_explicit_average(
     dimension = _find_group_dimension(question)
     intent.metric = metric
     intent.aggregation = "AVG"
+    intent.aggregation_filters = []
 
     if dimension:
         intent.group_by = [dimension]
@@ -392,6 +495,42 @@ def _normalize_explicit_average(
     )
 
 
+def _normalize_explicit_sum(
+    question: str,
+    intent: "QueryIntent",
+) -> None:
+    explicit_sum = re.search(r"\b(?:sum|combined|in total)\b", question)
+    leading_total = re.search(
+        r"\b(?:what is|show|calculate|give me)\s+(?:the\s+)?total\b",
+        question,
+    )
+    ranking_language = re.search(
+        r"\b(?:top|bottom|highest|lowest|largest|smallest|most|least)\b",
+        question,
+    )
+    if not explicit_sum and (not leading_total or ranking_language):
+        return
+
+    metric = _find_metric(question)
+    if metric is None:
+        return
+
+    dimension = _find_group_dimension(question)
+    intent.metric = metric
+    intent.aggregation = "SUM"
+    intent.aggregation_filters = []
+    intent.selected_fields = [dimension] if dimension else []
+    intent.group_by = [dimension] if dimension else []
+    intent.order_by = None
+    intent.order_direction = None
+    intent.limit = None
+
+    _remove_slots(
+        intent,
+        lambda slot: slot in {"aggregation", "metric", "ranking_metric"},
+    )
+
+
 def _normalize_explicit_metric_ranking(
     question: str,
     intent: "QueryIntent",
@@ -431,11 +570,33 @@ def _normalize_explicit_metric_ranking(
 def _comparison_from_question(
     question: str,
 ) -> tuple[str, float | int] | None:
+    number = r"\$?(\d+(?:\.\d+)?)"
+    optional_unit = (
+        r"(?:\s*(?:years?(?:\s+old)?|months?|gb|points?|dollars?))?"
+    )
     comparison_patterns = (
-        (r"\b(?:at least|no less than|minimum of)\s+(\d+(?:\.\d+)?)", ">="),
-        (r"\b(?:above|over|more than|greater than)\s+(\d+(?:\.\d+)?)", ">"),
-        (r"\b(?:at most|no more than|maximum of)\s+(\d+(?:\.\d+)?)", "<="),
-        (r"\b(?:below|under|less than)\s+(\d+(?:\.\d+)?)", "<"),
+        (rf"\b(?:at least|no less than|minimum of)\s+{number}", ">="),
+        (
+            rf"\b(?:above|over|more than|greater than|older than)\s+{number}",
+            ">",
+        ),
+        (rf"\b(?:at most|no more than|maximum of)\s+{number}", "<="),
+        (
+            rf"\b(?:below|under|less than|younger than)\s+{number}",
+            "<",
+        ),
+        (rf"\b(?:exactly|equal to)\s+{number}", "="),
+        (
+            rf"\b{number}{optional_unit}\s+(?:or|and)\s+"
+            r"(?:older|above|higher|more)\b",
+            ">=",
+        ),
+        (
+            rf"\b{number}{optional_unit}\s+(?:or|and)\s+"
+            r"(?:younger|below|lower|less)\b",
+            "<=",
+        ),
+        (rf"\b{number}{optional_unit}\s*\+", ">="),
     )
 
     for pattern, operator in comparison_patterns:
@@ -449,17 +610,38 @@ def _comparison_from_question(
     return None
 
 
+def _comparison_for_metric(
+    question: str,
+    metric: str | None,
+) -> tuple[str, float | int] | None:
+    comparison = _comparison_from_question(question)
+
+    if comparison is None:
+        return None
+
+    operator, value = comparison
+    if (
+        metric == "services.tenure_in_months"
+        and re.search(r"\b\d+(?:\.\d+)?\s+years?\b", question)
+    ):
+        value *= 12
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
+
+    return operator, value
+
+
 def _normalize_explicit_threshold(
     question: str,
     intent: "QueryIntent",
 ) -> None:
-    comparison = _comparison_from_question(question)
     metric = _find_metric(question)
+    comparison = _comparison_for_metric(question, metric)
 
     if comparison is None or metric is None:
         return
 
-    from intent_parser import FilterCondition
+    from .intent_parser import FilterCondition
 
     operator, value = comparison
     condition = next(
@@ -481,12 +663,9 @@ def _normalize_explicit_threshold(
     if not intent.aggregation:
         intent.metric = metric
         intent.selected_fields = []
-        intent.order_by = metric
-        intent.order_direction = (
-            "DESC"
-            if operator in {">", ">="}
-            else "ASC"
-        )
+        # A comparison chooses rows; it does not imply sorting them.
+        intent.order_by = None
+        intent.order_direction = None
 
     _remove_slots(
         intent,
@@ -510,12 +689,13 @@ def _normalize_internet_service_percentage(
     if not re.search(percentage_pattern, question):
         return
 
-    from intent_parser import FilterCondition
+    from .intent_parser import FilterCondition
 
     intent.target_entity = "customers"
     intent.selected_fields = []
     intent.metric = "services.customer_id"
     intent.aggregation = "PERCENTAGE"
+    intent.aggregation_filters = []
     intent.filters = []
     intent.group_by = []
     intent.order_by = None
@@ -589,13 +769,201 @@ def _normalize_vague_business_language(
         )
 
 
+def _normalize_ambiguous_business_language(
+    question: str,
+    intent: "QueryIntent",
+) -> None:
+    """Stabilize known vague concepts without inventing their meaning."""
+
+    from .intent_parser import FilterCondition
+
+    if re.search(rf"\bloyal\s+{CUSTOMER_NOUN}\b", question):
+        intent.target_entity = "customers"
+        intent.selected_fields = []
+        intent.metric = "services.tenure_in_months"
+        intent.aggregation = None
+        intent.filters = [
+            FilterCondition(
+                field="services.tenure_in_months",
+                operator=">=",
+                value=None,
+            )
+        ]
+        intent.group_by = []
+        intent.order_by = None
+        intent.order_direction = None
+        intent.limit = None
+        intent.unresolved_slots = ["tenure_threshold"]
+        intent.ambiguity_reasons = [
+            "The minimum tenure that defines loyalty is not specified."
+        ]
+        intent.clarification_question = (
+            "What minimum tenure in months should define a loyal customer?"
+        )
+        return
+
+    if re.search(r"\bcontract\b.*\b(?:best|performing best)\b", question):
+        intent.target_entity = "contracts"
+        intent.selected_fields = ["services.contract"]
+        intent.metric = None
+        intent.aggregation = None
+        intent.filters = []
+        intent.group_by = ["services.contract"]
+        intent.order_by = None
+        intent.order_direction = None
+        intent.limit = 1
+        intent.unresolved_slots = ["ranking_metric"]
+        intent.ambiguity_reasons = [
+            "The metric that defines the best contract is not specified."
+        ]
+        intent.clarification_question = (
+            "Which metric should define the best contract type?"
+        )
+        return
+
+    if re.search(r"\bhigh\s+churn score\b", question):
+        intent.target_entity = "customers"
+        intent.selected_fields = []
+        intent.metric = "status.churn_score"
+        intent.aggregation = None
+        intent.filters = [
+            FilterCondition(
+                field="status.churn_score",
+                operator=">",
+                value=None,
+            )
+        ]
+        intent.group_by = []
+        intent.order_by = None
+        intent.order_direction = None
+        intent.limit = None
+        intent.unresolved_slots = ["churn_score_threshold"]
+        intent.ambiguity_reasons = [
+            "The churn score that should count as high is not specified."
+        ]
+        intent.clarification_question = (
+            "What churn score should be considered high?"
+        )
+        return
+
+    if re.search(r"\bhealthy\s+(?:customer\s+)?retention\b", question):
+        intent.target_entity = "cities"
+        intent.selected_fields = ["location.city"]
+        intent.metric = None
+        intent.aggregation = None
+        intent.filters = []
+        intent.group_by = ["location.city"]
+        intent.order_by = None
+        intent.order_direction = None
+        intent.limit = 1
+        intent.unresolved_slots = ["retention_metric"]
+        intent.ambiguity_reasons = [
+            "The database measure that defines healthy retention is not specified."
+        ]
+        intent.clarification_question = (
+            "Which metric should define healthy city retention?"
+        )
+        return
+
+    if re.search(r"\baffordable\s+monthly (?:charge|charges|bill|bills)\b", question):
+        intent.target_entity = "customers"
+        intent.selected_fields = []
+        intent.metric = "services.monthly_charge"
+        intent.aggregation = None
+        intent.filters = [
+            FilterCondition(
+                field="services.monthly_charge",
+                operator="<=",
+                value=None,
+            )
+        ]
+        intent.group_by = []
+        intent.order_by = None
+        intent.order_direction = None
+        intent.limit = None
+        intent.unresolved_slots = ["monthly_charge_threshold"]
+        intent.ambiguity_reasons = [
+            "The maximum monthly charge that counts as affordable is not specified."
+        ]
+        intent.clarification_question = (
+            "What maximum monthly charge should be considered affordable?"
+        )
+        return
+
+    if re.search(r"\bpayment method\b.*\b(?:effective|effectiveness)\b", question):
+        intent.target_entity = "payment methods"
+        intent.selected_fields = ["services.payment_method"]
+        intent.metric = None
+        intent.aggregation = None
+        intent.filters = []
+        intent.group_by = ["services.payment_method"]
+        intent.order_by = None
+        intent.order_direction = None
+        intent.limit = 1
+        intent.unresolved_slots = ["ranking_metric"]
+        intent.ambiguity_reasons = [
+            "The metric that defines payment-method effectiveness is not specified."
+        ]
+        intent.clarification_question = (
+            "Which metric should define the most effective payment method?"
+        )
+        return
+
+    if re.search(r"\byoung\s+customers?\b.*\bspend a lot\b", question):
+        intent.target_entity = "customers"
+        intent.selected_fields = []
+        intent.metric = None
+        intent.aggregation = None
+        intent.filters = [
+            FilterCondition(
+                field="demographics.age",
+                operator="<=",
+                value=None,
+            )
+        ]
+        intent.group_by = []
+        intent.order_by = None
+        intent.order_direction = None
+        intent.limit = None
+        intent.unresolved_slots = [
+            "young_age_threshold",
+            "spending_metric",
+        ]
+        intent.ambiguity_reasons = [
+            "The maximum age that counts as young is not specified.",
+            "The spending field and threshold are not specified.",
+        ]
+        intent.clarification_question = (
+            "What maximum age should be considered young?"
+        )
+        return
+
+    if re.search(r"\bpoor\s+service experience\b", question):
+        intent.target_entity = "customers"
+        intent.selected_fields = []
+        intent.metric = None
+        intent.aggregation = None
+        intent.filters = []
+        intent.group_by = []
+        intent.order_by = None
+        intent.order_direction = None
+        intent.limit = None
+        intent.unresolved_slots = ["service_experience_metric"]
+        intent.ambiguity_reasons = [
+            "The database measure that defines poor service experience is not specified."
+        ]
+        intent.clarification_question = (
+            "How should poor service experience be measured, such as by a maximum satisfaction score?"
+        )
+
+
 def normalize_intent(
     question: str,
     intent: "QueryIntent",
 ) -> "QueryIntent":
     """Apply deterministic schema semantics to an LLM-produced intent."""
 
-    normalized_question = " ".join(question.lower().split())
+    normalized_question = normalize_schema_language(question)
     normalized_intent = intent.model_copy(deep=True)
 
     aggregation_aliases = {
@@ -612,6 +980,7 @@ def normalize_intent(
     _normalize_churned_filter(normalized_question, normalized_intent)
     _normalize_customer_count(normalized_question, normalized_intent)
     _normalize_explicit_average(normalized_question, normalized_intent)
+    _normalize_explicit_sum(normalized_question, normalized_intent)
     _normalize_explicit_metric_ranking(
         normalized_question,
         normalized_intent,
@@ -622,6 +991,10 @@ def normalize_intent(
         normalized_intent,
     )
     _normalize_vague_business_language(
+        normalized_question,
+        normalized_intent,
+    )
+    _normalize_ambiguous_business_language(
         normalized_question,
         normalized_intent,
     )

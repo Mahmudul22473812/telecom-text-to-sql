@@ -12,12 +12,12 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from pipeline import PipelineResult, run_pipeline
-from query_executor import execute_query
-from sql_validator import validate_sql
+from telecom_text_to_sql.pipeline import PipelineResult, run_pipeline
+from telecom_text_to_sql.query_executor import execute_query
+from telecom_text_to_sql.sql_validator import validate_sql
 
 
-DEFAULT_CASES_FILE = Path(__file__).parent / "full_system_cases.json"
+DEFAULT_CASES_FILE = Path(__file__).parent / "comprehensive_cases.json"
 DEFAULT_REPORT_FILE = Path(__file__).parent / "reports" / "latest.json"
 
 RELEASE_GATES = {
@@ -206,12 +206,23 @@ def evaluate_case(
     classification_correct = (
         result.initially_ambiguous == expected_ambiguous
     )
-    expected_status = (
+    expected_status = case.get("expected_status") or (
         "needs_clarification"
         if expected_ambiguous and not answers
         else "success"
     )
     status_correct = result.status == expected_status
+    expected_clarification_terms = [
+        str(term).lower()
+        for term in case.get("expected_clarification_contains", [])
+    ]
+    clarification_text = " ".join(
+        result.clarification_questions
+    ).lower()
+    clarification_content_correct = all(
+        term in clarification_text
+        for term in expected_clarification_terms
+    )
 
     sql_valid = (
         validate_sql(result.sql).is_valid
@@ -239,7 +250,11 @@ def evaluate_case(
             reference_error = f"{type(error).__name__}: {error}"
             execution_match = False
 
-    passed = classification_correct and status_correct
+    passed = (
+        classification_correct
+        and status_correct
+        and clarification_content_correct
+    )
 
     if result.sql is not None:
         passed = passed and sql_valid is True
@@ -257,10 +272,19 @@ def evaluate_case(
         "expected_status": expected_status,
         "actual_status": result.status,
         "status_correct": status_correct,
+        "expected_clarification_contains": expected_clarification_terms,
+        "clarification_content_correct": clarification_content_correct,
         "clarification_questions": result.clarification_questions,
         "clarification_answers": result.clarification_answers,
+        "intent": (
+            result.intent.model_dump(mode="json")
+            if result.intent
+            else None
+        ),
         "sql": result.sql,
         "sql_valid": sql_valid,
+        "sql_validation_errors": result.sql_validation_errors,
+        "columns": result.columns,
         "execution_match": execution_match,
         "generated_row_count": len(result.rows),
         "reference_error": reference_error,

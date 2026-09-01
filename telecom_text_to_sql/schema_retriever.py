@@ -4,7 +4,7 @@ from functools import lru_cache
 
 import ollama
 
-from schema_metadata import SCHEMA_METADATA
+from .schema_metadata import SCHEMA_METADATA, normalize_schema_language
 
 
 EMBEDDING_MODEL = "nomic-embed-text"
@@ -59,17 +59,20 @@ def get_embedding(text):
 
 def retrieve_candidate_columns(question, top_k=12):
 
-    question_embedding = get_embedding(question)
+    semantic_question = normalize_schema_language(question)
+    question_embedding = get_embedding(semantic_question)
 
     scored_columns = []
 
     for column_name, metadata in SCHEMA_METADATA.items():
 
         description = metadata["description"]
+        aliases = ", ".join(metadata.get("aliases", []))
 
         schema_text = (
             f"Column: {column_name}. "
-            f"Meaning: {description}"
+            f"Meaning: {description}. "
+            f"Common wording: {aliases or 'none'}"
         )
 
         column_embedding = get_embedding(
@@ -309,13 +312,15 @@ def retrieve_relevant_columns(
     final_k=6
 ):
 
+    semantic_question = normalize_schema_language(question)
+
     candidates = retrieve_candidate_columns(
-        question,
+        semantic_question,
         top_k=candidate_k
     )
 
     ranked_columns = rerank_columns(
-        question,
+        semantic_question,
         candidates,
         top_k=final_k
     )

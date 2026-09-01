@@ -1,7 +1,8 @@
 # Deployment readiness
 
 This project exposes a reusable clarification-aware Text-to-SQL pipeline in
-`pipeline.py`. The terminal application in `text_to_sql.py` is a thin client
+`telecom_text_to_sql/pipeline.py`. The terminal application in
+`text_to_sql.py` is a thin client
 of that pipeline, so an API or worker can call the same tested implementation
 without triggering interactive input during import.
 
@@ -25,7 +26,7 @@ without triggering interactive input during import.
 4. Import the telecom dataset when initializing a new database:
 
    ```powershell
-   py -3 import_data.py
+   py -3 scripts\import_data.py
    ```
 
 ## Required checks
@@ -70,7 +71,7 @@ comparison cannot pass the deployment gate.
 ## Programmatic use
 
 ```python
-from pipeline import run_pipeline
+from telecom_text_to_sql import run_pipeline
 
 result = run_pipeline(
     "Which customers have monthly charges above 100?",
@@ -87,13 +88,19 @@ else:
     print(result.error or result.sql_validation_errors)
 ```
 
-Possible statuses are `success`, `needs_clarification`, `sql_rejected`, and
-`error`.
+Possible statuses are `success`, `needs_clarification`, `unsupported`,
+`sql_rejected`, and `error`. Predictive, data-changing, administrative, and
+credential requests return `unsupported` before model or database access.
+
+The verified language and schema boundary is documented in
+`SUPPORTED_QUESTIONS.md`. A question outside that contract must be added to the
+scenario matrix with an expected result before support is claimed.
 
 ## Production boundary
 
-Passing this repository's release gate establishes readiness for the tested
-telecom schema and language categories. A public deployment still needs an API
+Passing this repository's release gate establishes readiness for the 83-case
+supported telecom scenario matrix and its language categories. It does not
+claim correctness for every possible sentence or database question. A public deployment still needs an API
 or UI layer with authentication, request-size limits, rate limiting, request
 timeouts, structured logging, health checks, secret management, and monitoring.
 The database account should also have PostgreSQL-level read-only permissions;

@@ -74,14 +74,23 @@
     "category": "clear_threshold",
     "question": "List customers whose monthly bill is above 100.",
     "expected_ambiguous": false,
-    "reference_sql": "SELECT s.customer_id, s.monthly_charge FROM services s WHERE s.monthly_charge > 100 ORDER BY s.monthly_charge DESC LIMIT 20;"
+    "reference_sql": "SELECT s.customer_id, s.monthly_charge FROM services s WHERE s.monthly_charge > 100;",
+    "order_sensitive": false
   },
   {
     "id": "clear_tenure_threshold",
     "category": "clear_threshold",
     "question": "Show customers with at least 48 months of tenure.",
     "expected_ambiguous": false,
-    "reference_sql": "SELECT s.customer_id, s.tenure_in_months FROM services s WHERE s.tenure_in_months >= 48 ORDER BY s.tenure_in_months DESC LIMIT 20;"
+    "reference_sql": "SELECT s.customer_id, s.tenure_in_months FROM services s WHERE s.tenure_in_months >= 48;",
+    "order_sensitive": false
+  },
+  {
+    "id": "clear_age_postfix_threshold",
+    "category": "clear_threshold",
+    "question": "Count the customers who are 65 years old or older.",
+    "expected_ambiguous": false,
+    "reference_sql": "SELECT COUNT(d.customer_id) FROM demographics d WHERE d.age >= 65;"
   },
   {
     "id": "clear_top_revenue",
@@ -205,7 +214,7 @@
     "question": "Who are our strongest customers?",
     "expected_ambiguous": true,
     "clarification_answers": ["highest total revenue"],
-    "reference_sql": "SELECT s.customer_id, s.total_revenue FROM services s ORDER BY s.total_revenue DESC LIMIT 20;"
+    "reference_sql": "SELECT s.customer_id, s.total_revenue FROM services s ORDER BY s.total_revenue DESC;"
   },
   {
     "id": "clarified_expensive_bill",
@@ -213,7 +222,8 @@
     "question": "Which customers have expensive monthly bills?",
     "expected_ambiguous": true,
     "clarification_answers": ["above 100"],
-    "reference_sql": "SELECT s.customer_id, s.monthly_charge FROM services s WHERE s.monthly_charge > 100 ORDER BY s.monthly_charge DESC LIMIT 20;"
+    "reference_sql": "SELECT s.customer_id, s.monthly_charge FROM services s WHERE s.monthly_charge > 100;",
+    "order_sensitive": false
   },
   {
     "id": "clarified_long_tenure",
@@ -221,7 +231,8 @@
     "question": "Who are our long-term customers?",
     "expected_ambiguous": true,
     "clarification_answers": ["at least 48 months"],
-    "reference_sql": "SELECT s.customer_id, s.tenure_in_months FROM services s WHERE s.tenure_in_months >= 48 ORDER BY s.tenure_in_months DESC LIMIT 20;"
+    "reference_sql": "SELECT s.customer_id, s.tenure_in_months FROM services s WHERE s.tenure_in_months >= 48;",
+    "order_sensitive": false
   },
   {
     "id": "clarified_two_slots",
@@ -229,6 +240,6 @@
     "question": "Show the strongest customers with expensive monthly bills.",
     "expected_ambiguous": true,
     "clarification_answers": ["highest total revenue", "above 100"],
-    "reference_sql": "SELECT s.customer_id, s.total_revenue FROM services s WHERE s.monthly_charge > 100 ORDER BY s.total_revenue DESC LIMIT 20;"
+    "reference_sql": "SELECT s.customer_id, s.total_revenue FROM services s WHERE s.monthly_charge > 100 ORDER BY s.total_revenue DESC;"
   }
 ]

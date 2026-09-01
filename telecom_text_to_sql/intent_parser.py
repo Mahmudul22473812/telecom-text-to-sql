@@ -1,9 +1,11 @@
 import json
+import re
 
 import ollama
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from schema_retriever import retrieve_relevant_columns
+from .schema_metadata import SCHEMA_METADATA
+from .schema_retriever import retrieve_relevant_columns
 
 
 
@@ -18,6 +20,35 @@ class FilterCondition(BaseModel):
     operator: str | None = None
     value: str | int | float | bool | None = None
 
+    @model_validator(mode="after")
+    def coerce_schema_typed_value(self):
+        """Keep numeric database fields numeric if a model emits text."""
+
+        metadata = SCHEMA_METADATA.get(self.field or "", {})
+        if (
+            metadata.get("data_type") not in {"integer", "number"}
+            or not isinstance(self.value, str)
+        ):
+            return self
+
+        match = re.fullmatch(
+            r"\s*\$?(-?\d+(?:\.\d+)?)\s*"
+            r"(?:dollars?|years?(?:\s+old)?|months?|gb|points?)?\s*",
+            self.value,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return self
+
+        raw_value = match.group(1)
+        if metadata["data_type"] == "integer" and "." not in raw_value:
+            self.value = int(raw_value)
+        else:
+            number = float(raw_value)
+            self.value = int(number) if number.is_integer() else number
+
+        return self
+
 
 class QueryIntent(BaseModel):
     target_entity: str | None = None
@@ -29,6 +60,10 @@ class QueryIntent(BaseModel):
     aggregation: str | None = None
 
     percentage_condition: FilterCondition | None = None
+
+    # Conditions evaluated inside a grouped aggregate rather than in WHERE.
+    # This preserves categories whose matching-record count is zero.
+    aggregation_filters: list[FilterCondition] = Field(default_factory=list)
 
     filters: list[FilterCondition] = Field(default_factory=list)
 
@@ -67,6 +102,17 @@ class QueryIntent(BaseModel):
 # --------------------------------------------------
 
 def parse_intent(question):
+
+    # Explicit supported requests are compiled deterministically. This keeps
+    # grouping words, filters, comparisons, rankings, and limits from being
+    # silently lost by a small local model. Ambiguous language still falls
+    # through to the schema-grounded LLM parser below.
+    from .semantic_parser import parse_explicit_intent
+
+    explicit_intent = parse_explicit_intent(question)
+
+    if explicit_intent is not None:
+        return QueryIntent.model_validate(explicit_intent)
 
     # --------------------------------------------------
     # Step 1: Retrieve the most relevant schema columns
@@ -333,6 +379,11 @@ percentage_condition:
 For a PERCENTAGE aggregation, the condition identifying records in
 the numerator. Otherwise null.
 
+aggregation_filters:
+Conditions evaluated inside a grouped aggregation. Use these instead
+of ordinary filters when counting matching records within every group,
+so groups with zero matches remain represented. Otherwise use [].
+
 filters:
 Conditions restricting records.
 
@@ -596,6 +647,7 @@ Return ONLY valid JSON matching exactly this structure:
     "metric": "string or null",
     "aggregation": "string or null",
     "percentage_condition": null,
+    "aggregation_filters": [],
     "filters": [
         {{
             "field": "string or null",
@@ -662,7 +714,7 @@ USER QUESTION:
 
     # LLMs can still contradict explicit language even at temperature 0.
     # Normalize high-confidence business expressions deterministically.
-    from intent_normalizer import normalize_intent
+    from .intent_normalizer import normalize_intent
 
     return normalize_intent(
         question,

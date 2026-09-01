@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from intent_parser import QueryIntent
+from .intent_parser import QueryIntent
 
 
 # --------------------------------------------------
@@ -102,7 +102,12 @@ def validate_intent(
     # 1. Validate filters
     # --------------------------------------------------
 
-    for filter_condition in intent.filters:
+    all_filter_conditions = [
+        *intent.filters,
+        *intent.aggregation_filters,
+    ]
+
+    for filter_condition in all_filter_conditions:
 
         field_name = filter_condition.field
         operator = filter_condition.operator
@@ -277,6 +282,20 @@ def validate_intent(
                 )
             )
 
+    if intent.aggregation_filters and (
+        not intent.group_by
+        or not intent.aggregation
+        or intent.aggregation.upper() != "COUNT"
+    ):
+        add_issue(
+            unresolved_slots,
+            reasons,
+            "aggregation_filters",
+            (
+                "Conditional record counting requires grouped COUNT "
+                "aggregation semantics."
+            ),
+        )
 
     # --------------------------------------------------
     # 2a. Validate percentage calculation
@@ -408,11 +427,17 @@ def validate_intent(
     clarification_question = None
 
     if not is_complete:
+        can_reuse_contextual_question = (
+            intent.clarification_question
+            and intent.unresolved_slots
+            and unresolved_slots
+            and intent.unresolved_slots[0] == unresolved_slots[0]
+        )
 
         clarification_question = (
-            build_clarification_question(
-                unresolved_slots
-            )
+            intent.clarification_question
+            if can_reuse_contextual_question
+            else build_clarification_question(unresolved_slots)
         )
 
 
@@ -454,6 +479,24 @@ def build_clarification_question(
             "What metric should be used "
             "for the ranking?"
         )
+
+    if slot_lower == "retention_metric":
+        return "Which metric should define healthy city retention?"
+
+    if slot_lower == "spending_metric":
+        return (
+            "Should spending mean monthly charge, total charges, "
+            "or total revenue?"
+        )
+
+    if slot_lower == "service_experience_metric":
+        return (
+            "How should poor service experience be measured, "
+            "such as by a maximum satisfaction score?"
+        )
+
+    if slot_lower == "young_age_threshold":
+        return "What maximum age should be considered young?"
 
 
     # --------------------------------------------------
@@ -515,7 +558,7 @@ def build_clarification_question(
 
 if __name__ == "__main__":
 
-    from intent_parser import (
+    from .intent_parser import (
         parse_intent
     )
 

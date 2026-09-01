@@ -1,4 +1,4 @@
-from pipeline import run_pipeline
+from telecom_text_to_sql import run_pipeline
 
 
 MAX_ROWS_TO_DISPLAY = 20
@@ -57,6 +57,11 @@ def main():
 
     if result.status == "needs_clarification":
         print("\nThe request still needs clarification.")
+        return
+
+    if result.status == "unsupported":
+        print("\nUnsupported request:")
+        print(result.error)
         return
 
     print("\nPipeline failed:")

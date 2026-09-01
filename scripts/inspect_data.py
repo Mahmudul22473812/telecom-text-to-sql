@@ -1,7 +1,8 @@
 import pandas as pd
 from pathlib import Path
 
-data_folder = Path("data")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+data_folder = PROJECT_ROOT / "data"
 
 files = [
     "Telco_customer_churn_demographics.xlsx",

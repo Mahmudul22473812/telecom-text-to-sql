@@ -10,7 +10,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from clarification import check_ambiguity
+from telecom_text_to_sql.clarification import check_ambiguity
 
 
 # --------------------------------------------------

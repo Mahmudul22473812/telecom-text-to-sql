@@ -1,5 +1,5 @@
-from intent_parser import parse_intent
-from intent_validator import validate_intent
+from .intent_parser import parse_intent
+from .intent_validator import validate_intent
 
 
 # --------------------------------------------------

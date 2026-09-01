@@ -1,7 +1,7 @@
 import unittest
 
-from intent_normalizer import normalize_intent
-from intent_parser import FilterCondition, QueryIntent
+from telecom_text_to_sql.intent_normalizer import normalize_intent
+from telecom_text_to_sql.intent_parser import FilterCondition, QueryIntent
 
 
 class IntentNormalizerTests(unittest.TestCase):
@@ -121,6 +121,26 @@ class IntentNormalizerTests(unittest.TestCase):
         self.assertEqual(normalized.filters, [])
         self.assertEqual(normalized.unresolved_slots, [])
 
+    def test_every_is_a_grouping_quantifier(self):
+        normalized = normalize_intent(
+            "Give me the customer count for every internet connection type.",
+            QueryIntent(
+                target_entity="customers",
+                aggregation="COUNT",
+                metric="demographics.customer_id",
+            ),
+        )
+
+        self.assertEqual(
+            normalized.group_by,
+            ["services.internet_type"],
+        )
+        self.assertEqual(
+            normalized.selected_fields,
+            ["services.internet_type"],
+        )
+        self.assertEqual(normalized.metric, "services.customer_id")
+
     def test_plain_subscriber_count_discards_invented_filter(self):
         intent = QueryIntent(
             filters=[
@@ -159,7 +179,7 @@ class IntentNormalizerTests(unittest.TestCase):
         self.assertEqual(normalized.metric, "status.cltv")
         self.assertEqual(normalized.unresolved_slots, [])
 
-    def test_explicit_threshold_controls_default_order(self):
+    def test_explicit_threshold_does_not_invent_order(self):
         intent = QueryIntent(
             order_by="services.tenure_in_months",
             order_direction="ASC",
@@ -173,8 +193,87 @@ class IntentNormalizerTests(unittest.TestCase):
 
         self.assertEqual(normalized.filters[0].operator, ">=")
         self.assertEqual(normalized.filters[0].value, 48)
-        self.assertEqual(normalized.order_direction, "DESC")
+        self.assertIsNone(normalized.order_by)
+        self.assertIsNone(normalized.order_direction)
         self.assertEqual(normalized.unresolved_slots, [])
+
+    def test_explicit_age_count_resolves_postfix_threshold(self):
+        intent = QueryIntent(
+            target_entity="customers",
+            aggregation="COUNT",
+            metric="demographics.customer_id",
+            filters=[
+                FilterCondition(
+                    field="demographics.age",
+                    operator=">=",
+                    value=None,
+                )
+            ],
+            unresolved_slots=["age_threshold"],
+            ambiguity_reasons=["age threshold is missing"],
+        )
+
+        normalized = normalize_intent(
+            "Count the customers who are 65 years old or older.",
+            intent,
+        )
+
+        self.assertEqual(normalized.aggregation, "COUNT")
+        self.assertEqual(normalized.metric, "demographics.customer_id")
+        self.assertEqual(len(normalized.filters), 1)
+        self.assertEqual(normalized.filters[0].field, "demographics.age")
+        self.assertEqual(normalized.filters[0].operator, ">=")
+        self.assertEqual(normalized.filters[0].value, 65)
+        self.assertEqual(normalized.unresolved_slots, [])
+
+    def test_common_comparison_paraphrases_are_resolved(self):
+        cases = {
+            "Show customers younger than 30.": (
+                "demographics.age",
+                "<",
+                30,
+            ),
+            "Show customers aged 30 or younger.": (
+                "demographics.age",
+                "<=",
+                30,
+            ),
+            "Show customers with tenure of 24 months or more.": (
+                "services.tenure_in_months",
+                ">=",
+                24,
+            ),
+            "List customers with a monthly charge of $50 or less.": (
+                "services.monthly_charge",
+                "<=",
+                50,
+            ),
+            "Count customers aged 65+.": (
+                "demographics.age",
+                ">=",
+                65,
+            ),
+        }
+
+        for question, (field, operator, value) in cases.items():
+            with self.subTest(question=question):
+                normalized = normalize_intent(
+                    question,
+                    QueryIntent(
+                        target_entity="customers",
+                        unresolved_slots=["threshold"],
+                    ),
+                )
+
+                matching_filters = [
+                    condition
+                    for condition in normalized.filters
+                    if condition.field == field
+                ]
+                self.assertEqual(len(matching_filters), 1)
+                self.assertEqual(matching_filters[0].operator, operator)
+                self.assertEqual(matching_filters[0].value, value)
+                self.assertEqual(normalized.unresolved_slots, [])
 
     def test_explicit_customer_ranking_overrides_spurious_sum(self):
         intent = QueryIntent(

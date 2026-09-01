@@ -1,8 +1,8 @@
 import unittest
 
-from intent_parser import FilterCondition, QueryIntent
-from sql_generator import generate_sql_from_intent
-from sql_validator import validate_sql
+from telecom_text_to_sql.intent_parser import FilterCondition, QueryIntent
+from telecom_text_to_sql.sql_generator import generate_sql_from_intent
+from telecom_text_to_sql.sql_validator import validate_sql
 
 
 class SQLGeneratorTests(unittest.TestCase):
