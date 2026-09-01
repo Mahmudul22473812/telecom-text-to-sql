@@ -29,6 +29,18 @@ without triggering interactive input during import.
    py -3 scripts\import_data.py
    ```
 
+## Run the user interface
+
+Start the local browser interface from the project root:
+
+```powershell
+py -3 -m streamlit run streamlit_app.py --server.address localhost
+```
+
+The interface supports normal questions, multi-turn clarification, generated
+SQL inspection, complete-result CSV downloads, and display-only row limits.
+Closing the terminal or pressing `Ctrl+C` stops the local server.
+
 ## Required checks
 
 Run deterministic unit and regression tests:
