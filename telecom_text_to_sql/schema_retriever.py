@@ -1,9 +1,7 @@
 import json
 import math
-from functools import lru_cache
 
-import ollama
-
+from .model_provider import chat_json, embed_texts, get_embedding
 from .schema_metadata import SCHEMA_METADATA, normalize_schema_language
 
 
@@ -42,17 +40,6 @@ def cosine_similarity(vector_a, vector_b):
 # Generate embedding
 # --------------------------------------------------
 
-@lru_cache(maxsize=512)
-def get_embedding(text):
-
-    response = ollama.embed(
-        model=EMBEDDING_MODEL,
-        input=text
-    )
-
-    return tuple(response["embeddings"][0])
-
-
 # --------------------------------------------------
 # First stage: semantic retrieval
 # --------------------------------------------------
@@ -60,9 +47,14 @@ def get_embedding(text):
 def retrieve_candidate_columns(question, top_k=12):
 
     semantic_question = normalize_schema_language(question)
-    question_embedding = get_embedding(semantic_question)
+    question_embedding = get_embedding(
+        semantic_question,
+        local_model=EMBEDDING_MODEL,
+    )
 
     scored_columns = []
+    schema_columns = []
+    schema_texts = []
 
     for column_name, metadata in SCHEMA_METADATA.items():
 
@@ -75,9 +67,18 @@ def retrieve_candidate_columns(question, top_k=12):
             f"Common wording: {aliases or 'none'}"
         )
 
-        column_embedding = get_embedding(
-            schema_text
-        )
+        schema_columns.append((column_name, description))
+        schema_texts.append(schema_text)
+
+    column_embeddings = embed_texts(
+        tuple(schema_texts),
+        local_model=EMBEDDING_MODEL,
+    )
+
+    for (column_name, description), column_embedding in zip(
+        schema_columns,
+        column_embeddings,
+    ):
 
         similarity = cosine_similarity(
             question_embedding,
@@ -236,9 +237,8 @@ Return at most {top_k} columns.
 Do not generate SQL.
 """
 
-    response = ollama.chat(
-        model=RERANK_MODEL,
-        messages=[
+    raw_result = chat_json(
+        [
             {
                 "role": "system",
                 "content": (
@@ -252,13 +252,8 @@ Do not generate SQL.
                 "content": prompt
             }
         ],
-        format="json",
-        options={
-            "temperature": 0
-        }
+        local_model=RERANK_MODEL,
     )
-
-    raw_result = response["message"]["content"]
 
     data = json.loads(raw_result)
 

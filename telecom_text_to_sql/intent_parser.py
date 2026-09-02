@@ -1,9 +1,9 @@
 import json
 import re
 
-import ollama
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .model_provider import chat_json
 from .schema_metadata import SCHEMA_METADATA
 from .schema_retriever import retrieve_relevant_columns
 
@@ -674,9 +674,8 @@ USER QUESTION:
     # Step 3: Ask local Llama model to extract intent
     # --------------------------------------------------
 
-    response = ollama.chat(
-        model="llama3.2",
-        messages=[
+    raw_result = chat_json(
+        [
             {
                 "role": "system",
                 "content": (
@@ -693,17 +692,13 @@ USER QUESTION:
                 "content": prompt
             }
         ],
-        format="json",
-        options={
-            "temperature": 0
-        }
+        local_model="llama3.2",
     )
 
     # --------------------------------------------------
     # Step 4: Parse returned JSON
     # --------------------------------------------------
 
-    raw_result = response["message"]["content"]
     data = json.loads(raw_result)
 
     # --------------------------------------------------

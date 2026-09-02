@@ -6,8 +6,9 @@ generated SQL, and inspect or download the query results through a Streamlit
 chat interface or a terminal client.
 
 The project uses a hybrid approach: deterministic semantic rules handle
-well-defined supported language, while local Ollama models provide schema
-retrieval, reranking, and structured intent extraction for broader phrasing.
+well-defined supported language, while a selectable Ollama or Gemini provider
+supports schema retrieval, reranking, and structured intent extraction for
+broader phrasing.
 SQL is generated from a validated structured intent instead of being executed
 directly from free-form model output.
 
@@ -89,9 +90,8 @@ The main stages are:
 
 - Python 3
 - PostgreSQL
-- Ollama
-- `llama3.2` for schema reranking and structured intent extraction
-- `nomic-embed-text` for semantic schema retrieval
+- Ollama with `llama3.2` and `nomic-embed-text` for local development
+- Gemini chat and embeddings as the hosted deployment option
 - Pydantic for typed intent models
 - Psycopg 3 for PostgreSQL access
 - Streamlit and pandas for the browser interface
@@ -193,9 +193,8 @@ DB_PORT=5432
 
 The `.env` file is ignored by Git. Never commit database credentials.
 
-Create the database tables described in
-[`telecom_text_to_sql/schema.py`](telecom_text_to_sql/schema.py). The current
-import script expects those tables to exist before it runs.
+The importer creates the application tables and indexes when they do not
+already exist.
 
 ### 6. Import the dataset
 
@@ -252,6 +251,18 @@ else:
 
 Pipeline statuses are `success`, `needs_clarification`, `unsupported`,
 `sql_rejected`, and `error`.
+
+## Public deployment
+
+The repository supports a low-change portfolio deployment using hosted
+PostgreSQL, Gemini, and Streamlit Community Cloud. Local development still
+defaults to Ollama, while production selects Gemini through environment
+variables. The deployed public Streamlit URL can be embedded into a Vercel
+website with an iframe.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the complete Neon migration, read-only
+database-role setup, Streamlit secrets, cloud verification, and Vercel embed
+instructions.
 
 ## Testing and evaluation
 
@@ -317,13 +328,14 @@ replacement for least privilege.
   unsupported SQL patterns are rejected.
 - Arbitrary subqueries, window functions, complex `OR` logic, `HAVING`, and
   unverified multi-metric reports are outside the current contract.
-- The importer loads data into existing tables; schema migration automation is
-  not included yet.
-- The local application expects PostgreSQL and Ollama to be running.
-- Streamlit Community Cloud cannot reach PostgreSQL or Ollama running on a
-  developer's `localhost`. Public deployment requires remotely reachable
-  services, cloud secrets, authentication, rate limiting, timeouts, logging,
-  and monitoring.
+- Local mode expects PostgreSQL and Ollama to be running. Hosted mode requires
+  valid remote-service credentials.
+- The included public setup is intended for a portfolio demonstration. A
+  higher-traffic production service still needs centralized rate limiting,
+  authentication, usage monitoring, and automated backups.
+- The cloud provider may interpret untested free-form wording differently from
+  the locally evaluated model, so the database-backed gate must be rerun after
+  changing providers.
 - Passing the evaluation matrix demonstrates behavior within the tested
   contract; it does not guarantee correctness for every possible sentence.
 
@@ -332,4 +344,3 @@ replacement for least privilege.
 - [Project journey and interview guide](PROJECT_JOURNEY.md)
 - [Supported question contract](SUPPORTED_QUESTIONS.md)
 - [Deployment and release checks](DEPLOYMENT.md)
-

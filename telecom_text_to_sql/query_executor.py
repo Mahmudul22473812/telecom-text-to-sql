@@ -1,15 +1,7 @@
 import os
-from pathlib import Path
 
-import psycopg
-from dotenv import load_dotenv
-
+from .database import connect_database
 from .sql_validator import validate_sql
-
-
-# Load environment variables
-env_path = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(dotenv_path=env_path)
 
 
 def execute_query(sql_query):
@@ -23,18 +15,19 @@ def execute_query(sql_query):
         error_message = "; ".join(validation.errors)
         raise ValueError(f"Unsafe SQL query detected: {error_message}")
 
-    connection = psycopg.connect(
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT"),
-    )
+    connection = connect_database()
 
     try:
         with connection.transaction():
             with connection.cursor() as cursor:
                 cursor.execute("SET TRANSACTION READ ONLY")
+                timeout_ms = int(
+                    os.getenv("DB_STATEMENT_TIMEOUT_MS", "15000")
+                )
+                cursor.execute(
+                    "SELECT set_config('statement_timeout', %s, true)",
+                    (str(timeout_ms),),
+                )
                 cursor.execute(sql_query)
 
                 rows = cursor.fetchall()

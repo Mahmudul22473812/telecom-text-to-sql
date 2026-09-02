@@ -1,32 +1,21 @@
 import os
+import sys
 from pathlib import Path
 
 import pandas as pd
-import psycopg
-from dotenv import load_dotenv
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from telecom_text_to_sql.database import connect_database
+from telecom_text_to_sql.database_schema import ensure_database_schema
 
 
 # --------------------------------------------------
 # Load environment variables
 # --------------------------------------------------
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-env_path = PROJECT_ROOT / ".env"
-load_dotenv(dotenv_path=env_path)
-
-
-# --------------------------------------------------
-# Connect to PostgreSQL
-# --------------------------------------------------
-
-connection = psycopg.connect(
-    dbname=os.getenv("DB_NAME"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    host=os.getenv("DB_HOST"),
-    port=os.getenv("DB_PORT"),
-)
-
 
 # --------------------------------------------------
 # Dataset file paths
@@ -134,7 +123,7 @@ column_mappings = {
 # Import function
 # --------------------------------------------------
 
-def import_table(table_name, file_path):
+def import_table(connection, table_name, file_path):
     print(f"\nImporting {table_name}...")
 
     # Read Excel file
@@ -172,35 +161,46 @@ def import_table(table_name, file_path):
 # Import all datasets
 # --------------------------------------------------
 
-try:
+def main():
+    # DATABASE_ADMIN_URL is intended only for one-time schema/data setup.
+    # The public application should receive a separate read-only DATABASE_URL.
+    connection = connect_database(os.getenv("DATABASE_ADMIN_URL") or None)
 
-    # Clear existing data before re-importing
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            TRUNCATE TABLE
-                status,
-                services,
-                location,
-                population,
-                demographics
-            RESTART IDENTITY CASCADE;
-        """)
+    try:
+        ensure_database_schema(connection)
 
-    connection.commit()
+        # Clear existing data before re-importing
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                TRUNCATE TABLE
+                    status,
+                    services,
+                    location,
+                    population,
+                    demographics
+                RESTART IDENTITY CASCADE;
+            """)
 
-    print("Existing database data cleared.")
+        connection.commit()
 
-    # Import fresh data
-    for table_name, file_path in datasets.items():
-        import_table(table_name, file_path)
+        print("Existing database data cleared.")
 
-    print("\nAll datasets imported successfully!")
+        # Import fresh data
+        for table_name, file_path in datasets.items():
+            import_table(connection, table_name, file_path)
 
-except Exception as error:
-    connection.rollback()
+        print("\nAll datasets imported successfully!")
 
-    print("\nImport failed:")
-    print(error)
+    except Exception as error:
+        connection.rollback()
 
-finally:
-    connection.close()
+        print("\nImport failed:")
+        print(error)
+        raise
+
+    finally:
+        connection.close()
+
+
+if __name__ == "__main__":
+    main()

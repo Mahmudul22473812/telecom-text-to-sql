@@ -130,8 +130,8 @@ def render_result(result: PipelineResult, display_rows: int, key: str) -> None:
         return
 
     st.error(
-        "The query could not be completed. Check that PostgreSQL and "
-        "Ollama are running, then try again."
+        "The query could not be completed. Check the database and AI "
+        "service configuration, then try again."
     )
     if result.error:
         with st.expander("Technical details"):
